@@ -1,0 +1,39 @@
+﻿{
+  "name": "shengjidancup-calculator",
+  "version": "1.0.0",
+  "description": "生鸡蛋杯计算器 Electron 打包",
+  "main": "main.js",
+  "author": "风筝",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^37.2.1",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.shengjidan.calculator",
+    "productName": "生鸡蛋杯计算器",
+    "files": [
+      "cal.html",
+      "main.js",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "生鸡蛋杯计算器-${version}.exe"
+    }
+  }
+}
