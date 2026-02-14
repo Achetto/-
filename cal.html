@@ -353,7 +353,6 @@
         <div class="row wrap">
           <button id="addUrgent" class="btn-primary">加入紧急作战</button>
           <button id="addHidden" class="btn-primary">加入隐藏关卡</button>
-          <span class="chip"><input id="flagNoLeak" type="checkbox" /> 无漏标记</span>
         </div>
 
         <div class="section-head">
@@ -447,14 +446,14 @@
         { name: "紧急借力打力", score: 40, condition: "第6层" }
       ],
       hidden: [
-        { name: "紧急源源不断", score: 20, condition: "无漏+20" },
-        { name: "劫罚", score: 15, condition: "紧急按30" },
-        { name: "生百相", score: 30, condition: "无漏+30" },
-        { name: "硕果累累", score: 15, condition: "紧急按30" },
+        { name: "紧急源源不断", score: 20, condition: "无漏+20", noLeakOnly: true },
+        { name: "劫罚", score: 15, urgentScore: 30, condition: "普通+15 / 紧急+30" },
+        { name: "生百相", score: 30, condition: "无漏+30", noLeakOnly: true },
+        { name: "硕果累累", score: 15, urgentScore: 30, condition: "普通+15 / 紧急+30" },
         { name: "以逸待劳", score: 30, condition: "固定+30" },
-        { name: "硅基伥的宴席", score: 25, condition: "紧急按50" },
-        { name: "彻底失控", score: 25, condition: "紧急按50" },
-        { name: "作壁上观", score: 20, condition: "无漏+20" },
+        { name: "硅基伥的宴席", score: 25, urgentScore: 50, condition: "普通+25 / 紧急+50" },
+        { name: "彻底失控", score: 25, urgentScore: 50, condition: "普通+25 / 紧急+50" },
+        { name: "作壁上观", score: 20, condition: "无漏+20", noLeakOnly: true },
         { name: "分明", score: 30, condition: "固定+30" }
       ],
       boss: [
@@ -497,44 +496,17 @@
     const bossSelect = el("bossSelect");
     const detailBody = el("detailBody");
     const counterWrap = el("counterWrap");
+    const urgentOptions = [];
+    const hiddenOptions = [];
     const bossOptions = [];
 
-    function withRuleAdjust(item, type) {
-      const isN18 = el("difficulty").value === "n18";
-      const noLeak = el("flagNoLeak").checked;
-      let score = item.score;
-      let condition = item.condition;
-
-      if (item.n18Only && !isN18) {
-        score = 0;
-        condition = `${item.condition}（当前非n18，记0分）`;
-      }
-
-      if (type === "urgent") {
-        if (isN18 && item.name.includes("邙山镇地方志")) score = 70;
-        if (isN18 && item.name.includes("不成烟火")) score = 50;
-        if (isN18 && item.name.includes("离域检查")) score = 50;
-        if (isN18 && item.name.includes("砺锋")) score = 50;
-        if (isN18 && item.name.includes("人镇")) score = 50;
-        if (noLeak && item.name.includes("越山海")) score = 70;
-      }
-
-      if (type === "hidden") {
-        if ((item.name === "劫罚" || item.name === "硕果累累") && isN18) score = 30;
-        if ((item.name === "硅基伥的宴席" || item.name === "彻底失控") && isN18) score = 50;
-      }
-
-      return { ...item, score, condition };
-    }
-
     function addItem(item, type) {
-      const it = withRuleAdjust(item, type);
       state.items.push({
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         type,
-        name: it.name,
-        condition: it.condition,
-        score: Number(it.score)
+        name: item.name,
+        condition: item.condition,
+        score: Number(item.score)
       });
       state.history.push({ op: "add" });
       render();
@@ -599,35 +571,80 @@
         if (isN18 && item.name.includes("砺锋")) score = 50;
         if (isN18 && item.name.includes("人镇")) score = 50;
       }
-      if (type === "hidden") {
-        if ((item.name === "劫罚" || item.name === "硕果累累") && isN18) score = 30;
-        if ((item.name === "硅基伥的宴席" || item.name === "彻底失控") && isN18) score = 50;
-      }
       return score;
-    }
-
-    function buildSelect(selectEl, list, type, filterFn = () => true) {
-      selectEl.innerHTML = "";
-      list.forEach((item, idx) => {
-        if (!filterFn(item)) return;
-        const op = document.createElement("option");
-        op.value = String(idx);
-        op.textContent = `${item.name} (+${getOptionScore(item, type)})`;
-        selectEl.appendChild(op);
-      });
-      if (!selectEl.options.length) {
-        const op = document.createElement("option");
-        op.value = "";
-        op.textContent = "当前难度无可选项";
-        selectEl.appendChild(op);
-      }
     }
 
     function refreshStageSelects() {
       const isN18 = el("difficulty").value === "n18";
-      buildSelect(urgentSelect, rules.urgent, "urgent", item => !item.n18Only || isN18);
-      buildSelect(hiddenSelect, rules.hidden, "hidden");
+      buildUrgentSelect(isN18);
+      buildHiddenSelect();
       buildBossSelect();
+    }
+
+    function buildUrgentSelect(isN18) {
+      urgentOptions.length = 0;
+      rules.urgent.forEach(item => {
+        if (item.n18Only && !isN18) return;
+        const score = getOptionScore(item, "urgent");
+        urgentOptions.push({
+          name: item.name,
+          score,
+          condition: item.condition
+        });
+        if (item.name.includes("越山海")) {
+          urgentOptions.push({
+            name: `${item.name}（无漏）`,
+            score: 70,
+            condition: `${item.condition} / 无漏版本`
+          });
+        }
+      });
+      urgentSelect.innerHTML = "";
+      urgentOptions.forEach((item, idx) => {
+        const op = document.createElement("option");
+        op.value = String(idx);
+        op.textContent = `${item.name} (+${item.score})`;
+        urgentSelect.appendChild(op);
+      });
+      if (!urgentSelect.options.length) {
+        const op = document.createElement("option");
+        op.value = "";
+        op.textContent = "当前难度无可选项";
+        urgentSelect.appendChild(op);
+      }
+    }
+
+    function buildHiddenSelect() {
+      hiddenOptions.length = 0;
+      rules.hidden.forEach(item => {
+        if (item.noLeakOnly) {
+          hiddenOptions.push({
+            name: `${item.name}（无漏）`,
+            score: item.score,
+            condition: `${item.condition} / 无漏版本`
+          });
+          return;
+        }
+        hiddenOptions.push({
+          name: item.name,
+          score: item.score,
+          condition: `${item.condition} / 普通版本`
+        });
+        if (typeof item.urgentScore === "number") {
+          hiddenOptions.push({
+            name: `${item.name}（紧急）`,
+            score: item.urgentScore,
+            condition: `${item.condition} / 紧急版本`
+          });
+        }
+      });
+      hiddenSelect.innerHTML = "";
+      hiddenOptions.forEach((item, idx) => {
+        const op = document.createElement("option");
+        op.value = String(idx);
+        op.textContent = `${item.name} (+${item.score})`;
+        hiddenSelect.appendChild(op);
+      });
     }
 
     function buildBossSelect() {
@@ -744,12 +761,12 @@
 
     el("addUrgent").addEventListener("click", () => {
       if (urgentSelect.value === "") return;
-      addItem(rules.urgent[Number(urgentSelect.value)], "urgent");
+      addItem(urgentOptions[Number(urgentSelect.value)], "urgent");
     });
 
     el("addHidden").addEventListener("click", () => {
       if (hiddenSelect.value === "") return;
-      addItem(rules.hidden[Number(hiddenSelect.value)], "hidden");
+      addItem(hiddenOptions[Number(hiddenSelect.value)], "hidden");
     });
     el("addBoss").addEventListener("click", () => {
       if (bossSelect.value === "") return;
@@ -791,11 +808,10 @@
       ["ingotStart", "ingotEnd"].forEach(id => (el(id).value = 0));
       el("difficulty").value = "n15";
       el("flagBuff").checked = false;
-      el("flagNoLeak").checked = false;
       render();
     });
 
-    ["difficulty", "baseSettle", "ingotStart", "ingotEnd", "extraBonus", "extraPenaltyA", "flagBuff", "flagNoLeak"]
+    ["difficulty", "baseSettle", "ingotStart", "ingotEnd", "extraBonus", "extraPenaltyA", "flagBuff"]
       .forEach(id => el(id).addEventListener("input", render));
 
     el("difficulty").addEventListener("input", refreshStageSelects);
